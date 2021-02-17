@@ -1,6 +1,6 @@
 --[[
 This file is part of curvi.
-Copyright (c) 2019-2021 RigoLigo
+Copyright (c) 2020-2021 RigoLigo
 
 This program is free software: you can redistribute it and/or modify  
 it under the terms of the GNU General Public License as published by  
@@ -25,108 +25,117 @@ elemtype=0--element type:0=no 1=g 2=c 3=p
 fullflush=false --if set to true, the next drawing routine will redraw the entire screen.
 drawtype=0 --If fullflush is not set, this variable controls what to redraw. 0=controlfield 1=drawingarea
 pointradius=3 render=false
-showcrosshair=true crosshair={50,50}
+showcrosshair=true crosshair={50,50} --As shown by name; crosshair coordinates are represented in raw screen pixel coordinates.
 curve=class()point=class()group=class()
-stat=""keyin=""groups={}curves={}points={}
-zoom=2 rawoffset={0,0} windowsize={platform.window:width(),platform.window:height()}
-rendered={}renderres=15
+stat=""
+inputCache=""
+groups={}curves={}points={} --Storage tables
+zoom=2 rawoffset={0,0} --zoom: zoom x; raw offset is the canvas center xy when not zoomed(zoom==1) windowsize={platform.window:width(),platform.window:height()}
+rendered={} --Where rendered polylines are stored
+renderres=15 --Segment count that each bezier section gets when rendered
 ptptr=nil locpt={{0,0},{0,0},{0,0}}
---raw offset is the center xy on zoom==1
 
 --Class members definitions
-function curve:init()curve.name="newcurve"curve.visible=true curve.closed=false curve.color={0,0,0}curve.groupno=-1 local p1=class(point)local p2=class(point)
+--[[
+function curve:init()
+    curve.name="newcurve"
+    curve.visible=true
+    curve.closed=false curve.color={0,0,0}curve.groupno=-1 local p1=class(point)local p2=class(point)
 p1.p={0,0}p1.c1={0,10}p1.c2={0,-10}p2.p={20,0}p2.c1={20,-10}p2.c2={20,10}curve.points={p1,p2}end
-function point:init()point.p={0,0}point.c1={0,0}point.c2={0,0}end
+function point:init()point.p={0,0}point.c1={0,0}point.c2={0,0}end]]
 function point:intmto(pt,t)
-rtn=class(point)
-rtn.p[1]=(pt[1]-p[1])*t+p[1]
-rtn.p[2]=(pt[2]-p[2])*t+p[2]
-return rtn
+    rtn=class(point)
+    rtn.p[1]=(pt[1]-p[1])*t+p[1]
+    rtn.p[2]=(pt[2]-p[2])*t+p[2]
+    return rtn
 end
-function group:init()group.curves={}group.name="newgroup"group.visible=true end
+--[[function group:init()group.curves={}group.name="newgroup"group.visible=true end
 --Init all classes
-point:init()curve:init()group:init()
+point:init()curve:init()group:init()]]
 
---L(ogic) port
-function Lcin(c)
-keyin=keyin..c
-if true then--condition stub
- if c=="+"then keyin=""Lzoomin()end
- if c=="-"then keyin=""Lzoomout()end
-end
-if mode==0 then
- if c=="z"then keyin=""Lrerender()end
- if c=="Z"then keyin=""Cclearrender()render=false Lfullflush()end
- if c=="L"then keyin=""Lload()end
- if c=="h"then keyin=""local o=Lgetselection()if o==nil then stat="[H]Don't know which object to work with."Lupdatecontrolfield()return end o.visible=not o.visible stat="[H]idden property of the selection has been toggled"Lfullflush()end
- if c=="d"then keyin=""
- if selp~=-1 then selp=-1 return elseif selc~=-1 then selc=-1 return elseif selg~=-1 then selg=-1 end Ldefaultfield()Lfullflush()end
- --above always valid on mode 0
- if modify==0 then
-  if c=="s"then Lmod(1)Csel()Lupdatecontrolfield()elseif
-  c=="c"then Lmod(2)Ccreate()Lupdatecontrolfield()
-  elseif c=="H"then Ltogglecrosshair()
-  elseif c=="l"then keyin=""
-  if selc==-1 then stat="Don't know which curve to work with."Lupdatecontrolfield()else Lmod(3)if selp==-1 then selp=1 end Lswitchpoints(1)ptptr=Lcurrentpoint().p Cmouselocate()Lfullflush()end
-  elseif c=="C"then 
-  if selc~=-1 then local c=Lcurrentcurve()c.closed=not c.closed stat="[C]Toggled curve closed property."Lfullflush()end
-  end
- elseif modify==1 then
-  if Lhascandidate(c)then x=Cdispobjtype(c,"[S]elect ",true)if x~=-1 then Lsm(1) end Lupdatecontrolfield()
-  else Ldiscard()Cdispobjtype(c,"No candidate for ")Lupdatecontrolfield()
-  end
- elseif modify==2 then
-  t=Cdispobjtype(c,"[C]reate ",true)Lupdatecontrolfield()
-  if t~=-1 then Lsm(1)end
- elseif modify==3 then
-  Lswitchpoints(c)Cmouselocate()Lfullflush()
- end
-elseif mode==1 then
- Lupdatecontrolfield() else
-end
-cursor.show() 
+--################################## L(ogic) part ##################################
+function LCharacterReceived(c)
+    inputCache=inputCache..c
+    if true then--condition stub
+        if c=="+"then inputCache=""Lzoomin()end
+        if c=="-"then inputCache=""Lzoomout()end
+    end
+    if mode==0 then
+        if c=="z"then inputCache=""LInitiateRender()end
+        if c=="Z"then inputCache=""CClearRender()render=false Lfullflush()end
+        if c=="L"then inputCache=""Lload()end
+        if c=="h"then inputCache=""local o=Lgetselection()if o==nil then stat="[H]Don't know which object to work with."Lupdatecontrolfield()return end o.visible=not o.visible stat="[H]idden property of the selection has been toggled"Lfullflush()end
+        if c=="d"then inputCache=""
+        if selp~=-1 then selp=-1 return elseif selc~=-1 then selc=-1 return elseif selg~=-1 then selg=-1 end Ldefaultfield()Lfullflush()end
+        --above always valid on mode 0
+        if modify==0 then
+            if c=="s"then Lmod(1)CInitiateSelect()Lupdatecontrolfield()elseif
+            c=="c"then Lmod(2)CInitiateCreate()Lupdatecontrolfield()
+            elseif c=="H"then Ltogglecrosshair()
+            elseif c=="l"then inputCache=""
+            if selc==-1 then stat="Don't know which curve to work with."Lupdatecontrolfield()else Lmod(3)if selp==-1 then selp=1 end Lswitchpoints(1)ptptr=Lcurrentpoint().p CLocatePointByMouse()Lfullflush()end
+            elseif c=="C"then 
+            if selc~=-1 then local c=Lcurrentcurve()c.closed=not c.closed stat="[C]Toggled curve closed property."Lfullflush()end
+            end
+        
+        elseif modify==1 then
+            if Lhascandidate(c)then x=Cdispobjtype(c,"[S]elect ",true)if x~=-1 then Lsm(1) end Lupdatecontrolfield()
+            else Ldiscard()Cdispobjtype(c,"No candidate for ")Lupdatecontrolfield()
+            end
+        elseif modify==2 then
+            t=Cdispobjtype(c,"[C]reate ",true)Lupdatecontrolfield()
+            if t~=-1 then Lsm(1)end
+        elseif modify==3 then
+            Lswitchpoints(c)CLocatePointByMouse()Lfullflush()
+        end
+        elseif mode==1 then
+        Lupdatecontrolfield() else
+    end
+    cursor.show() 
 end
 
 function Lcommit()
- if modify==1 then
-  Ltryselect(elemtype,keyin)
- elseif modify==2 then
-  Ltrycreate(elemtype,keyin)
- end
- keyin=""Lupdatecontrolfield()
+    if modify==1 then
+        Ltryselect(elemtype,inputCache)
+    elseif modify==2 then
+        Ltrycreate(elemtype,inputCache)
+    end
+    inputCache=""Lupdatecontrolfield()
 end
 
 function Ltrycreate(k,x)local r
- if tonumber(x)~=nil and k~=3 then Ldiscard()Cdispobjtype(k,"Rejected pure number ")Lupdatecontrolfield()return end
- if k==1 then --group
-  for i=1,#groups do if groups[i].name==x then Ldiscard(false)Cdispobjtype(k,"Same name; failed to create ")Lupdatecontrolfield()return end end
-  r=Ngroup(x) groups[#groups+1]=r Cdispobjtype(k,"Created "..x.." ")
- elseif k==2 then --curve
-  for i=1,#curves do if curves[i].name==x then Ldiscard(false)Cdispobjtype(k,"Same name; failed to create ")Lupdatecontrolfield()return end end
-  r=Ncurve(x) curves[#curves+1]=r Cdispobjtype(k,"Created "..x.." ")
- else --can only be point
-  if x==""then x=(#Lcurrentcurve().points)+1 else x=tonumber(x)if x==nil then Ldiscard()stat="Invalid point index"Lupdatecontrolfield()end end
-  if x>#(curves[selc].points)+1 then x=#(curves[selc].points)+1 end if x<1 then x=1 end
-  table.insert(curves[selc].points,x,Npoint())
- end Ldiscard(false)Ltryselect(k,x,false)
+    if tonumber(x)~=nil and k~=3 then Ldiscard()Cdispobjtype(k,"Rejected pure number ")Lupdatecontrolfield()return end
+    if k==1 then --group
+        for i=1,#groups do if groups[i].name==x then Ldiscard(false)Cdispobjtype(k,"Same name; failed to create ")Lupdatecontrolfield()return end end
+        r=Ngroup(x) groups[#groups+1]=r Cdispobjtype(k,"Created "..x.." ")
+    elseif k==2 then --curve
+        for i=1,#curves do if curves[i].name==x then Ldiscard(false)Cdispobjtype(k,"Same name; failed to create ")Lupdatecontrolfield()return end end
+        r=Ncurve(x) curves[#curves+1]=r Cdispobjtype(k,"Created "..x.." ")
+    else --can only be point
+        if x==""then x=(#Lcurrentcurve().points)+1 else x=tonumber(x)if x==nil then Ldiscard()stat="Invalid point index"Lupdatecontrolfield()end end
+        if x>#(curves[selc].points)+1 then x=#(curves[selc].points)+1 end if x<1 then x=1 end
+        table.insert(curves[selc].points,x,Npoint())
+    end
+    Ldiscard(false)Ltryselect(k,x,false)
 end
 
 --Ltryselect: r==false no message
 function Ltryselect(k,x,r)local c=false
- local _x=tonumber(x),x if _x~=nil then x=_x c=true end
- if k==1 then --group
- elseif k==2 then --curve
-  if c then if x<=#curves and x>0 then selc=x else c="e"end else for i=1,#curves do if curves[i].name==x then selc=i break end end end
- else --can only be point
-  if c then if x<=#curves[selc].points and x>0 then selp=x pttype=1 else c="e" end else c="!" end
- end
+    local _x=tonumber(x),x if _x~=nil then x=_x c=true end
+    if k==1 then --group
+    elseif k==2 then --curve
+        if c then if x<=#curves and x>0 then selc=x else c="e"end else for i=1,#curves do if curves[i].name==x then selc=i break end end end
+    else --can only be point
+        if c then if x<=#curves[selc].points and x>0 then selp=x pttype=1 else c="e" end else c="!" end
+    end
 
- Ldiscard()
- if c=="e"and r then Cdispobjtype(k,"Exceeded total number of ")Lupdatecontrolfield()
- if c=="!"and r then Cdispobjtype(k,"Invalid index for ")end
- elseif r then Cdispobjtype(k,"Selected "..x.." ")end
- Lfullflush()
+    Ldiscard()
+    if c=="e"and r then Cdispobjtype(k,"Exceeded total number of ")Lupdatecontrolfield()
+    if c=="!"and r then Cdispobjtype(k,"Invalid index for ")end
+    elseif r then Cdispobjtype(k,"Selected "..x.." ")end
+    Lfullflush()
 end
+
 function Ldomouselocate()
 local pos,dx,dy,l
 pos=Lgetmemorypos(crosshair[1],crosshair[2])
@@ -152,7 +161,7 @@ function Lswitchpoints(c,r)
  elseif c=="*"then Ltryselect(3,selp-1,false)Lswitchpoints(_ptt,0)Lmod(3)
  elseif c=="/"then Ltryselect(3,selp+1,false)Lswitchpoints(_ptt,0)Lmod(3)
  end
- keyin=""
+ inputCache=""
 end
 function Lkeymove(a)local b
 if a=="up"then b=1 elseif a=="down"then b=2 elseif a=="left"then b=3 else b=4 end
@@ -170,11 +179,11 @@ if selp~=-1 then r=r.."."..selp end
 stat=r Lupdatecontrolfield()
 end
 function Lselg(g)if g<#groups and g>0 then selg=g else stat="Invalid group"mode=0 Lupdatecontrolfield()end end
-function Lsm(m)mode=m keyin=""Lupdatecontrolfield()end
+function Lsm(m)mode=m inputCache=""Lupdatecontrolfield()end
 function Lcm(m)mode=m Lupdatecontrolfield()end
 function Lmod(m)modify=m Lupdatecontrolfield()end
 function Lfullflush()fullflush=true platform.window:invalidate()end
-function Ltogglecrosshair()showcrosshair=not showcrosshair stat="Crosshair " if showcrosshair then stat=stat.."shown" else stat=stat.."hidden" end keyin=""Lfullflush()end
+function Ltogglecrosshair()showcrosshair=not showcrosshair stat="Crosshair " if showcrosshair then stat=stat.."shown" else stat=stat.."hidden" end inputCache=""Lfullflush()end
 function Lwindowfocused()fullflush=true end
 function Lhascandidate(c)if c=="g"and#groups~=0 then return true elseif c=="c"and#curves~=0 then return true elseif c=="p"then if selc==-1 then return false end if#curves[selc].points~=0 then return true end end return false end
 function Lcurrentpoint()if selc==-1 then return nil end return curves[selc].points[selp] end
@@ -241,19 +250,21 @@ function Lelementlocked()local t
 end end  
  
 end
-function Lrerender()
-rendered={}local millisec=timer.getMilliSecCounter()local seg,tmp seg=0
+
+                                        function LInitiateRender()
+rendered={}
+                                        local millisec=timer.getMilliSecCounter()local seg,tmp seg=0
 for i,c in pairs(curves)do
  tmp=Brendercurve(c)seg=seg+#tmp
  table.insert(rendered,tmp)
 end
 millisec=timer.getMilliSecCounter()-millisec
 render=true
-Crenderedtime(millisec,seg)
+CRenderComplete(millisec,seg)
 Lfullflush()
 end
 function Dscreenclear(gc)gc:setColorRGB(0xffffff)gc:fillRect(0,0,320,240)gc:setColorRGB(0)end
-function Dinputfield(gc)gc:setFont("serif","r",10)top=tostring(mode).."|"if mode==1 then top=top..stat..">"..keyin else top=top..keyin.."<"..stat end gc:drawString(top,0,0)end
+function Dinputfield(gc)gc:setFont("serif","r",10)top=tostring(mode).."|"if mode==1 then top=top..stat..">"..inputCache else top=top..inputCache.."<"..stat end gc:drawString(top,0,0)end
 function Dcrosshair(gc)gc:setColorRGB(0)gc:drawLine(0,crosshair[2],windowsize[1],crosshair[2])gc:drawLine(crosshair[1],18,crosshair[1],windowsize[2])end
 function Daxis(gc)gc:setColorRGB(0xcccccc)x,y=Lgetdrawpos({0,0})gc:drawLine(0,y,windowsize[1],y)gc:drawLine(x,18,x,windowsize[2])gc:setColorRGB(0)end
 function Dcurvepoints(gc,c,ci)
@@ -293,7 +304,7 @@ end
 function Lupdatecontrolfield()drawtype=0 platform.window:invalidate(0,0,320,18)end
 function Lupdatedrawingarea()drawtype=1 platform.window:invalidate(0,18,windowsize[1],windowsize[2]-18)end
 --Ldiscard(c) c==true get default field
-function Ldiscard(c)Lsm(0) modify=0 pttype=0 keyin=""if c==true then Ldefaultfield()end end
+function Ldiscard(c)Lsm(0) modify=0 pttype=0 inputCache=""if c==true then Ldefaultfield()end end
 function Lgetdrawpos(xy)
  return(xy[1]-rawoffset[1])*zoom+windowsize[1]/2
  ,(xy[2]-rawoffset[2])*zoom+windowsize[2]/2
@@ -302,7 +313,8 @@ function Lgetmemorypos(x,y)
  return{(x-windowsize[1]/2)/zoom+rawoffset[1]
  ,(y-windowsize[2]/2)/zoom+rawoffset[2]}
 end
---Bezier!
+
+--################################## Bezier! ################################## 
 function B2points(p1,p2,t,l,rev)
  local r
  if not rev then
@@ -340,28 +352,58 @@ function Brendercurve(c)
  end
  return ret
 end
---N(ew elements) part
-function Ngroup(n)local group={}
-group.curves={}if n then group.name=n else group.name="newgroup"end group.visible=true return group
+
+--################################## N(ew elements) part ##################################
+
+function Ngroup(n)
+    local group={}
+    group.curves={}
+    if n then group.name=n else group.name="newgroup"end
+    group.visible=true
+    return group
 end
+
 function Ncurve(n)
-local curve={}if n~=nil then curve.name=n else
-curve.name="newcurve"end curve.visible=true curve.closed=true curve.color={0,0,0}curve.group={} curve.locked=false curve.fillcolor={255,255,255}curve.fill=false
-local p1=Npoint()local p2=Npoint()p1.p={0,0}p1.c1={0,10}p1.c2={0,-10}p2.p={20,0}p2.c1={20,-10}p2.c2={20,10}curve.points={p1,p2}
-return curve
+    local curve={}
+    if n then curve.name=n else curve.name="newcurve"end
+    curve.visible=true
+    curve.closed=true
+    curve.color={0,0,0}
+    curve.group={}
+    curve.locked=false 
+    curve.fillcolor={255,255,255}
+    curve.fill=false
+    local p1=Npoint()
+    local p2=Npoint()
+    p1.p={0,0} p1.c1={0,10}  p1.c2={0,-10}
+    p2.p={20,0}p2.c1={20,-10}p2.c2={20,10}
+    curve.points={p1,p2}
+    return curve
 end
-function Npoint()local point={}point.p={0,0}point.c1={0,0}point.c2={0,0}
-point.visible=true point.locked=false return point end
---(S)C(reen prompters) part
-function Csel()stat="[S]elect (G)roup/(C)urve/(P)oint"end
-function Ccreate()stat="[C]reate (G)roup/(C)urve/(P)oint"end
-function Cmouselocate()stat="[L]ocate point "..selc.."["..selp.."]"end
-function Crenderedtime(t,seg)stat="[Z]Rendered in "..(t/1000).."s, total of "..seg.." segments"end
-function Cclearrender()stat="[Z]Cleared rendered image."end
---Event handlers part
+
+function Npoint()
+    local point={}
+    point.p={0,0}
+    point.c1={0,0}
+    point.c2={0,0}
+    point.visible=true 
+    point.locked=false 
+    return point 
+end
+
+--################################## (S)C(reen prompters) part ##################################
+
+function CInitiateSelect()stat="[S]elect (G)roup/(C)urve/(P)oint"end
+function CInitiateCreate()stat="[C]reate (G)roup/(C)urve/(P)oint"end
+function CLocatePointByMouse()stat="[L]ocate point "..selc.."["..selp.."]"end
+function CRenderComplete(t,seg)stat="[Z]Rendered in "..(t/1000).."s, total of "..seg.." segments"end
+function CClearRender()stat="[Z]Cleared rendered image."end
+
+--################################## Event handlers part ##################################
+
 function on.mouseDown()if modify==3 then Ldomouselocate()end end
 function on.getFocus()Lwindowfocused()end
-function on.charIn(c)Lcin(c)end
+function on.charIn(c)LCharacterReceived(c)end
 function on.enterKey()
 if mode==1 then Lcommit()
 elseif modify==3 then Ldomouselocate()
